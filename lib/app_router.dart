@@ -5,8 +5,14 @@ import 'core/widgets/placeholder_screen.dart';
 import 'features/auth/presentation/auth_controller.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/register_screen.dart';
+import 'features/bookings/presentation/booking_details_screen.dart';
+import 'features/bookings/presentation/my_bookings_screen.dart';
+import 'features/bookings/data/appointment_model.dart';
+import 'features/bookings/presentation/booking_confirmation_screen.dart';
+import 'features/bookings/presentation/booking_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/services/presentation/home_screen.dart';
+import 'features/services/presentation/service_details_screen.dart';
 import 'features/shell/main_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -36,14 +42,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
 
-      // Temporary: replaced by the real details screen in the next step
       GoRoute(
         path: '/service/:id',
-        builder: (_, state) => Scaffold(
-          appBar: AppBar(title: const Text('Service')),
-          body: Center(
-            child: Text('Service #${state.pathParameters['id']}: details coming next'),
-          ),
+        builder: (_, state) => ServiceDetailsScreen(
+          serviceId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/service/:id/book',
+        builder: (_, state) => BookingScreen(
+          serviceId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/booking/confirmation',
+        redirect: (_, state) => state.extra is AppointmentModel ? null : '/home',
+        builder: (_, state) =>
+            BookingConfirmationScreen(appointment: state.extra as AppointmentModel),
+      ),
+      GoRoute(
+        path: '/appointment/:id',
+        builder: (_, state) => BookingDetailsScreen(
+          appointmentId: int.parse(state.pathParameters['id']!),
         ),
       ),
 
@@ -54,11 +74,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-              path: '/bookings',
-              builder: (_, __) => const PlaceholderScreen(
-                  title: 'My Bookings', icon: Icons.calendar_month),
-            ),
+            GoRoute(path: '/bookings', builder: (_, __) => const MyBookingsScreen()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
