@@ -2,10 +2,7 @@
  
 REST API for a service booking and management mobile app. Customers can browse services, check real-time availability, book and cancel appointments, manage their profile, and ask an AI assistant about the available services.
  
-- **Mobile app repo:** https://github.com/YOUR_USERNAME/service_booking_app
-- **Live API:** `https://YOUR_DEPLOYED_URL/api`
-- **API documentation:** [docs/api.md](docs/api.md)
-- **Postman collection:** [docs/postman_collection.json](docs/postman_collection.json)
+
 ---
  
 ## Tech stack
