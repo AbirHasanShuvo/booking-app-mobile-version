@@ -1,206 +1,144 @@
-# Service Booking API
- 
-REST API for a service booking and management mobile app. Customers can browse services, check real-time availability, book and cancel appointments, manage their profile, and ask an AI assistant about the available services.
- 
+# Service Booking App (Flutter)
+
+A cross-platform mobile app where customers explore services, book appointments, manage their bookings, and get help from an AI assistant.
+
+
+
+## Screenshots
+
+| Login | Home | Service details |
+|---|---|---|
+| ![Login](screenshots/login.png) | ![Home](screenshots/home.png) | ![Details](screenshots/details.png) |
+
+| Booking | My bookings | Assistant |
+|---|---|---|
+| ![Booking](screenshots/booking.png) | ![Bookings](screenshots/bookings.png) | ![Assistant](screenshots/assistant.png) |
 
 ---
- 
+
+## Features
+
+- **Authentication:** register, login, logout, form validation, error messages, and a session that persists after the app is closed (JWT stored in secure storage)
+- **Home:** service list with image, name, description and price; search with debounce; category filter; "Popular services" section
+- **Service details:** full information, price, estimated duration, Book now
+- **Booking:** 14-day date picker, time slots from the server (booked and past slots are disabled), optional notes, confirmation screen
+- **My bookings:** upcoming and past tabs, booking details, cancel pending bookings with a confirm dialog, status chips (Pending, Confirmed, Cancelled, Completed)
+- **Profile:** view and edit name, email and phone; change password; logout with confirmation
+- **AI assistant:** chat about services and get recommendations (the AI key stays on the backend)
+- **UX:** loading, empty, success and error states on every screen, pull to refresh, retry buttons, reusable widgets
+
+---
+
 ## Tech stack
- 
+
 | Area | Choice |
 |---|---|
-| Framework | Laravel (PHP 8.3+) |
-| Database | MySQL (PostgreSQL also works, no code changes needed) |
-| Authentication | JWT via `php-open-source-saver/jwt-auth` |
-| AI | Google Gemini API, called from the server |
-| Validation | Laravel request validation |
- 
-### Why Laravel instead of Node/Express
- 
-The brief allows another backend if the decision is justified:
- 
-- Laravel is my primary backend framework, so I can deliver cleaner, more maintainable code in the available time.
-- It gives built-in validation, Eloquent relationships, migrations, seeders, rate limiting and a consistent error pipeline without extra libraries.
-- JWT is still used for authentication, exactly as the brief requires.
+| Framework | Flutter and Dart |
+| State management | Riverpod (`Notifier`, `FutureProvider`) |
+| Networking | Dio with an auth interceptor |
+| Navigation | go_router (auth redirects, bottom navigation shell) |
+| Secure storage | flutter_secure_storage |
+| Images | cached_network_image |
+| Formatting | intl |
+
 ---
- 
-## Features
- 
-- Register, login, logout and "current user" endpoints with JWT and hashed passwords
-- Protected routes (`auth:api` middleware)
-- Services: list with search, category, price and featured filters; single service details
-- Availability: time slots generated per service and date, blocking past and booked times
-- Appointments: create, list (upcoming or past), view, cancel (pending only)
-- Conflict prevention: overlapping bookings are rejected inside a database transaction
-- Profile update and password change
-- AI service assistant with the API key kept on the server
-- Consistent JSON response structure and error handling
+
+## Architecture
+
+Feature-first structure with a simple layering inside each feature:
+
+```
+lib/
+  core/
+    config/       app_config.dart          (API base URL)
+    network/      dio_client.dart, api_exception.dart
+    storage/      token_storage.dart
+    theme/        app_theme.dart
+    utils/        formatters.dart
+    widgets/      app_button, app_text_field, state_views, status_chip
+  features/
+    auth/         data/ (model, repository)  presentation/ (controller, screens)
+    services/     data/  presentation/ (providers, home, details, widgets)
+    booking/      booking screen, confirmation screen
+    bookings/     data/  presentation/ (my bookings, details, providers)
+    profile/      profile, edit profile, change password
+    ai_chat/      data/  presentation/ (controller, chat screen)
+    shell/        main_shell.dart          (bottom navigation)
+  app_router.dart
+  main.dart
+```
+
+Data flow: **Screen → Riverpod notifier/provider → Repository → Dio → REST API.**
+
+- Screens contain UI only.
+- Repositories are the only place that talks to the API and convert Dio errors into a single `ApiException`.
+- Models parse JSON (for example Laravel returns decimals as strings, and the models handle that).
+
+### Notable decisions
+
+- **Session restore:** on app start, the auth controller reads the token from secure storage and calls `/me`. If it succeeds, the user goes straight to Home.
+- **Expired token handling:** the Dio interceptor clears the token and returns the user to Login on any 401 from a protected request.
+- **Slot conflicts:** the app only shows what the server says is available. If another user takes a slot first, the API returns 409, and the app refreshes the slots and asks the user to choose again.
+- **Per-user state:** bookings and chat providers watch the logged-in user's id, so one user never sees another's cached data after switching accounts.
+- **Secrets:** the app contains no AI key. All AI calls go through the backend.
+
 ---
- 
+
 ## Setup
- 
+
 ### Requirements
- 
-- PHP 8.3+ and Composer
-- MySQL (or PostgreSQL)
-- A Gemini API key from https://aistudio.google.com
-### Installation
- 
+
+- Flutter SDK (stable) with Dart 3+
+- Android Studio or VS Code with an emulator, or a real Android device
+- The backend running locally or deployed (see the backend repo)
+
+### Run
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/service-booking-api.git
-cd service-booking-api
- 
-composer install
-cp .env.example .env
-php artisan key:generate
-php artisan jwt:secret
+git clone https://github.com/YOUR_USERNAME/service_booking_app.git
+cd service_booking_app
+flutter pub get
 ```
- 
-Create an empty database, then edit `.env` (see the table below).
- 
+
+The API base URL is set at build time with `--dart-define`. The default is `http://10.0.2.2:8000/api`, which is how the Android emulator reaches `localhost` on your computer.
+
 ```bash
-php artisan migrate --seed
-php artisan serve
+# Android emulator + local backend (default URL)
+flutter run
+
+# Deployed backend
+flutter run --dart-define=API_BASE_URL=https://YOUR_DEPLOYED_URL/api
+
+# Real phone + local backend on the same Wi-Fi
+flutter run --dart-define=API_BASE_URL=http://192.168.X.X:8000/api
 ```
- 
-The API is now available at `http://127.0.0.1:8000/api`.
- 
-To reach it from a real phone on the same Wi-Fi, run `php artisan serve --host=0.0.0.0` and use your computer's LAN IP.
- 
-### Environment variables
- 
-| Variable | Description |
-|---|---|
-| `APP_TIMEZONE` | Must be `Asia/Dhaka` (used for working hours and past-time checks) |
-| `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | Database connection |
-| `JWT_SECRET` | Generated by `php artisan jwt:secret` |
-| `GEMINI_API_KEY` | Your Gemini key. Never commit it. |
-| `GEMINI_MODEL` | Model name, for example `gemini-3.5-flash-lite`. Model names change over time, so check AI Studio if requests fail. |
- 
-### Seeded data
- 
-`php artisan migrate --seed` creates 4 categories and 8 services (4 of them featured). No demo user is seeded, so register one through the app or the API.
- 
-**Demo account for reviewers:** `YOUR_DEMO_EMAIL` / `YOUR_DEMO_PASSWORD`
- 
+
+For the last option, start Laravel with `php artisan serve --host=0.0.0.0`.
+
+### Build the APK
+
+```bash
+flutter build apk --release --dart-define=API_BASE_URL=https://YOUR_DEPLOYED_URL/api
+```
+
+The APK is created at `build/app/outputs/flutter-apk/app-release.apk`.
+
+### Android configuration
+
+- `android/app/src/main/AndroidManifest.xml` declares the `INTERNET` permission (required for release builds).
+- `android:usesCleartextTraffic="true"` is enabled only so local `http://` development works. It can be removed when the app only talks to an HTTPS backend.
+- `minSdk` is set to 23 (required by `flutter_secure_storage`).
+
 ---
- 
-## Database design
- 
-Four tables with these relationships:
- 
-```
-categories 1 ──< services 1 ──< appointments >── 1 users
-```
- 
-| Table | Key columns |
-|---|---|
-| `users` | id, name, email (unique), password (hashed), phone, avatar |
-| `categories` | id, name, slug (unique) |
-| `services` | id, category_id (FK, nullable), name, description, price, duration_minutes, image_url, is_featured, is_active |
-| `appointments` | id, user_id (FK), service_id (FK), start_at, end_at, status, notes, price_snapshot |
- 
-Notes:
- 
-- `appointments.status` is one of `pending`, `confirmed`, `cancelled`, `completed`.
-- `price_snapshot` stores the price at booking time, so later price changes do not alter old bookings.
-- Appointments have a composite index on `(service_id, start_at, end_at)` for the overlap check.
-- Foreign keys on appointments use `restrictOnDelete` so bookings are never silently deleted.
-ER diagram: `docs/er-diagram.png`
- 
+
+## Demo account
+
+Register a new account in the app, or use: `YOUR_DEMO_EMAIL` / `YOUR_DEMO_PASSWORD`
+
 ---
- 
-## API overview
- 
-All responses use one envelope:
- 
-```json
-{ "success": true, "message": "OK", "data": {} }
-```
- 
-Errors:
- 
-```json
-{ "success": false, "message": "Reason", "errors": {} }
-```
- 
-Send `Accept: application/json` on every request. Protected routes need `Authorization: Bearer <token>`.
- 
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| POST | `/auth/register` | No | Create an account, returns a token |
-| POST | `/auth/login` | No | Log in, returns a token |
-| POST | `/auth/logout` | Yes | Invalidate the token |
-| GET | `/me` | Yes | Current user |
-| PUT | `/me` | Yes | Update name, email, phone |
-| PUT | `/me/password` | Yes | Change password |
-| GET | `/categories` | No | List categories |
-| GET | `/services` | No | List services (`search`, `category_id`, `min_price`, `max_price`, `featured`, `per_page`) |
-| GET | `/services/{id}` | No | Service details |
-| GET | `/services/{id}/availability?date=YYYY-MM-DD` | No | Time slots for a date |
-| POST | `/appointments` | Yes | Book an appointment |
-| GET | `/appointments?scope=upcoming\|past` | Yes | Current user's appointments |
-| GET | `/appointments/{id}` | Yes | Appointment details (owner only) |
-| PATCH | `/appointments/{id}/cancel` | Yes | Cancel a pending appointment |
-| POST | `/ai/chat` | Yes | Ask the AI assistant (10 requests per minute) |
- 
-Full request and response examples are in [docs/api.md](docs/api.md).
- 
-### HTTP status codes used
- 
-| Code | Meaning |
-|---|---|
-| 200, 201 | Success, created |
-| 401 | Missing, invalid or expired token, or wrong credentials |
-| 404 | Not found (also returned for other users' appointments) |
-| 409 | Time slot already booked |
-| 422 | Validation error, past time, outside working hours, or invalid cancel |
-| 429 | Rate limit exceeded |
-| 503 | AI provider unavailable |
- 
----
- 
-## Key design decisions
- 
-**JWT authentication.** The token carries the user id and expiry and is signed with `JWT_SECRET`. The server verifies it by signature. Logout adds the token to the blacklist so it cannot be reused. Default token lifetime is 60 minutes.
- 
-**Authorization by scoping.** Every appointment query is filtered by the authenticated user's id taken from the token. Users can never read or cancel each other's bookings, and requests for someone else's appointment return 404 so the id's existence is not revealed.
- 
-**Availability and conflict prevention.**
- 
-- Working hours are 09:00 to 18:00 with slots every 30 minutes (constants in `app/Services/AvailabilityService.php`).
-- A slot's end time is its start plus the service duration, and it must finish before closing time.
-- Two bookings conflict when `existing.start < new.end AND existing.end > new.start`, for the same service and with status `pending` or `confirmed`. Cancelled bookings free the slot.
-- Creating a booking runs inside `DB::transaction` and locks the service row (`lockForUpdate`), so two users booking the same slot at the same moment are processed one after the other. The second one receives 409.
-**AI assistant.**
- 
-- The Gemini key lives only in `.env` on the server. The mobile app never sees it.
-- On each request, the server loads the active services from the database and injects them into the system prompt, so answers are based on real data and prices.
-- The prompt restricts the assistant to the listed services and asks it to decline unrelated questions.
-- The endpoint is authenticated and rate limited, and the controller returns a friendly 503 if the provider fails or times out.
-**Validation.** All input goes through Laravel validation. Passwords are hashed by the model's `hashed` cast.
- 
----
- 
-## Project structure
- 
-```
-app/
-  Http/Controllers/Api/   AuthController, ServiceController, AppointmentController,
-                          ProfileController, AiChatController
-  Models/                 User, Category, Service, Appointment
-  Services/               AvailabilityService, AiAssistantService
-database/
-  migrations/  seeders/
-routes/api.php
-docs/                     api.md, er-diagram.png, postman_collection.json
-```
- 
----
- 
-## Deployment notes
- 
-- Set `APP_ENV=production`, `APP_DEBUG=false` and a real `APP_KEY` and `JWT_SECRET` on the server.
-- Run `php artisan migrate --seed --force`.
-- Serve over HTTPS and point the mobile app's `API_BASE_URL` at it.
- 
+
+## Backend API
+
+The app uses these endpoints (full docs in the backend repo's `docs/api.md`):
+
+`/auth/register`, `/auth/login`, `/auth/logout`, `/me`, `/me/password`, `/categories`, `/services`, `/services/{id}`, `/services/{id}/availability`, `/appointments`, `/appointments/{id}`, `/appointments/{id}/cancel`, `/ai/chat`
